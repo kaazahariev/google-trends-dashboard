@@ -202,52 +202,46 @@
     .keyword-label { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; }
 
     /* Category grid for trending */
-    .cat-grid {
+    .trending-grid {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-      gap: 1rem;
+      gap: 0.75rem;
     }
-    .cat-box {
+    .trending-card {
+      display: flex; gap: 12px; align-items: flex-start;
       background: var(--bg-card); border: 1px solid var(--border);
-      border-radius: 12px; box-shadow: var(--shadow);
-      overflow: hidden; transition: border-color 0.2s;
+      border-radius: 10px; padding: 14px 16px;
+      cursor: pointer; transition: border-color 0.2s, box-shadow 0.2s;
     }
-    .cat-box:hover { border-color: var(--accent); }
-    .cat-box-header {
-      display: flex; align-items: center; gap: 8px;
-      padding: 12px 16px;
-      border-bottom: 1px solid var(--border);
-      font-weight: 600; font-size: 0.95rem;
+    .trending-card:hover {
+      border-color: var(--accent);
+      box-shadow: 0 2px 8px rgba(66,133,244,0.12);
     }
-    .cat-box-header .cat-icon { font-size: 1.1rem; }
-    .cat-box-header .cat-count {
-      margin-left: auto; font-size: 0.7rem; font-weight: 500;
-      color: var(--text-muted); background: var(--bg-badge);
-      padding: 2px 8px; border-radius: 99px;
+    .trending-card-rank {
+      flex-shrink: 0; width: 28px; height: 28px;
+      display: flex; align-items: center; justify-content: center;
+      background: var(--bg-badge); border-radius: 50%;
+      font-size: 0.75rem; font-weight: 700; color: var(--text-muted);
     }
-    .cat-box-body { padding: 8px 12px; max-height: 500px; overflow-y: auto; }
-    .cat-box-body::-webkit-scrollbar { width: 4px; }
-    .cat-box-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
-    .cat-box.updating { opacity: 0.6; transition: opacity 0.3s; }
-    .cat-box.updated {
-      animation: boxFlash 0.5s ease;
+    .trending-card:nth-child(1) .trending-card-rank,
+    .trending-card:nth-child(2) .trending-card-rank,
+    .trending-card:nth-child(3) .trending-card-rank {
+      background: var(--accent); color: #fff;
     }
-    @keyframes boxFlash {
-      0% { box-shadow: 0 0 0 2px var(--accent); }
-      100% { box-shadow: var(--shadow); }
+    .trending-card-body { flex: 1; min-width: 0; }
+    .trending-card-title {
+      font-weight: 600; font-size: 0.95rem; color: var(--text-main);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
-    .cat-box-header .cat-status {
-      width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0;
+    .trending-card-meta {
+      font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;
     }
-    .cat-status.stale { background: var(--text-muted); }
-    .cat-status.fresh { background: var(--green); }
-    .cat-status.loading { background: var(--accent); animation: pulse 1s infinite; }
-    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
-
-    .cat-box .rising-divider {
-      margin: 8px 0 6px; font-size: 0.7rem; font-weight: 600;
-      color: var(--green); text-transform: uppercase; letter-spacing: 0.05em;
+    .trending-card-snippet {
+      font-size: 0.78rem; color: var(--text-muted); margin-top: 4px;
+      display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+      overflow: hidden;
     }
+    .trending-card-snippet strong { color: var(--text-main); }
 
     /* Chart canvas wrapper */
     .chart-wrap { position: relative; width: 100%; }
@@ -411,14 +405,14 @@
     <div id="trendingSection" style="margin-top:2rem;">
       <div id="trendingLoading" class="spinner">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
-        <span>Зареждане на популярни търсения за България...</span>
+        <span>Зареждане на популярни търсения...</span>
       </div>
       <div id="trendingContent" style="display:none;">
         <h2 class="section-title">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
-          <span id="trendingTitle">Популярни в България</span>
+          <span id="trendingTitle">🔥 Популярни в България</span>
         </h2>
-        <div id="trendingGrid" class="cat-grid"></div>
+        <div id="trendingList"></div>
       </div>
     </div>
   </div>
@@ -775,33 +769,7 @@ async function fetchTrendingRSS(geo) {
   }));
 }
 
-// Fetch category trending via explore API (client-side)
-async function fetchCategoryTrending(geo, catId) {
-  const req = JSON.stringify({
-    comparisonItem: [{ keyword: '', geo, time: 'now 7-d' }],
-    category: catId,
-    property: ''
-  });
-  const exploreUrl = TRENDS_BASE + '/trends/api/explore?hl=en-US&tz=240&req=' + encodeURIComponent(req) + '&token=';
-  const exploreText = await proxyFetch(exploreUrl, 'explore-cat-' + catId);
-  const explore = parseTrendsResponse(exploreText);
-
-  const widgets = explore.widgets || [];
-  const queriesWidget = widgets.find(w => w.id?.startsWith('RELATED_QUERIES'));
-  if (!queriesWidget) return { top: [], rising: [] };
-
-  const token = queriesWidget.token;
-  const widgetReq = encodeURIComponent(JSON.stringify(queriesWidget.request));
-  const dataUrl = TRENDS_BASE + '/trends/api/widgetdata/relatedsearches?hl=en-US&tz=240&req=' + widgetReq + '&token=' + token;
-  const dataText = await proxyFetch(dataUrl, 'queries-cat-' + catId);
-  const data = parseTrendsResponse(dataText);
-
-  const ranked = data?.default?.rankedList || [];
-  return {
-    top: ranked[0]?.rankedKeyword || [],
-    rising: ranked[1]?.rankedKeyword || [],
-  };
-}
+// Category trending removed — explore API is rate-limited from CORS proxies/Workers
 
 // ============================================================
 // Main search handler
@@ -1105,232 +1073,69 @@ window.switchTab = function(btn, showId, hideId) {
 // ============================================================
 // Trending by Categories (client-side with localStorage cache)
 // ============================================================
-const TRENDING_CATS = [
-  { code: 'all', catId: 0,   label: 'Всички',       icon: '🔥' },
-  { code: 'ent', catId: 3,   label: 'Забавление',   icon: '🎬' },
-  { code: 'spo', catId: 20,  label: 'Спорт',        icon: '⚽' },
-  { code: 'tec', catId: 5,   label: 'Технологии',   icon: '💻' },
-  { code: 'biz', catId: 12,  label: 'Бизнес',       icon: '💼' },
-  { code: 'hea', catId: 45,  label: 'Здраве',       icon: '🏥' },
-  { code: 'fin', catId: 7,   label: 'Финанси',      icon: '📈' },
-  { code: 'new', catId: 16,  label: 'Новини',       icon: '📰' },
-];
+// Trending is loaded purely from Google RSS feed (reliable, no rate limits)
 
-// ---- Renderers ----
-function renderAllBoxBody(trends, el) {
-  if (!trends || !trends.length) { el.innerHTML = '<p style="color:var(--text-muted);padding:1rem;text-align:center;">Няма данни</p>'; return; }
-  el.innerHTML = trends.slice(0, 50).map((t, i) => `
-    <div class="trending-item" style="display:flex;gap:8px;align-items:flex-start;">
-      <span class="trending-rank">${i+1}</span>
-      <div style="flex:1;min-width:0;">
-        <div class="trending-title">${t.title}</div>
-        <div class="trending-meta">${t.traffic ? t.traffic + ' търсения' : ''}</div>
-        ${t.newsTitle ? `<div class="trending-snippet">${t.newsSource ? t.newsSource + ' — ' : ''}${t.newsTitle}</div>` : ''}
+// ---- Render trending list from RSS ----
+function renderTrendingList(trends) {
+  const el = document.getElementById('trendingList');
+  if (!trends || !trends.length) {
+    el.innerHTML = '<p style="color:var(--text-muted);padding:2rem;text-align:center;">Няма данни</p>';
+    return;
+  }
+  el.innerHTML = '<div class="trending-grid">' + trends.map((t, i) => `
+    <div class="trending-card" onclick="addKeyword('${t.title.replace(/'/g, "\\'")}'); handleSearch();">
+      <div class="trending-card-rank">${i + 1}</div>
+      <div class="trending-card-body">
+        <div class="trending-card-title">${t.title}</div>
+        <div class="trending-card-meta">${t.traffic ? t.traffic + ' търсения' : ''}</div>
+        ${t.newsTitle ? `<div class="trending-card-snippet">${t.newsSource ? '<strong>' + t.newsSource + '</strong> — ' : ''}${t.newsTitle}</div>` : ''}
       </div>
     </div>
-  `).join('');
+  `).join('') + '</div>';
 }
 
-function renderCatBoxBody(topQ, risingQ, el) {
-  if ((!topQ || !topQ.length) && (!risingQ || !risingQ.length)) { el.innerHTML = '<p style="color:var(--text-muted);padding:1rem;text-align:center;">Няма данни</p>'; return; }
-  let html = '';
-  if (topQ && topQ.length) {
-    topQ.slice(0, 50).forEach((item, i) => {
-      html += `<div class="list-item">
-        <span class="list-rank">${i+1}</span>
-        <span class="list-text">${item.query || item.topic?.title || ''}</span>
-        <div class="list-bar-wrap">
-          <div class="list-bar"><div class="list-bar-fill" style="width:${item.value}%"></div></div>
-          <span class="list-value">${item.value}</span>
-        </div>
-      </div>`;
-    });
-  }
-  if (risingQ && risingQ.length) {
-    html += '<div class="rising-divider">🚀 Нарастващи</div>';
-    risingQ.slice(0, 25).forEach((item, i) => {
-      const isBreakout = item.formattedValue === 'Breakout';
-      html += `<div class="list-item">
-        <span class="list-rank">${i+1}</span>
-        <span class="list-text">${item.query || item.topic?.title || ''}</span>
-        <span class="badge ${isBreakout ? 'badge-breakout' : 'badge-rising'}">${item.formattedValue}</span>
-      </div>`;
-    });
-  }
-  el.innerHTML = html;
-}
-
-function renderBoxData(catCode, data) {
-  const box = document.getElementById('catbox-' + catCode);
-  if (!box) return;
-  const body = box.querySelector('.cat-box-body');
-  const countBadge = box.querySelector('.cat-count');
-  if (catCode === 'all') {
-    renderAllBoxBody(data, body);
-    if (countBadge) countBadge.textContent = (data?.length || 0) + ' елемента';
-  } else {
-    renderCatBoxBody(data.top, data.rising, body);
-    const total = (data.top?.length || 0) + (data.rising?.length || 0);
-    if (countBadge) countBadge.textContent = total + ' елемента';
-  }
-}
-
-function setBoxStatus(catCode, status) {
-  const box = document.getElementById('catbox-' + catCode);
-  if (!box) return;
-  const dot = box.querySelector('.cat-status');
-  if (dot) dot.className = 'cat-status ' + status;
-}
-
-function buildCategoryGrid() {
-  const grid = document.getElementById('trendingGrid');
-  grid.innerHTML = TRENDING_CATS.map(c => `
-    <div class="cat-box" id="catbox-${c.code}">
-      <div class="cat-box-header">
-        <span class="cat-icon">${c.icon}</span>
-        <span>${c.label}</span>
-        <span class="cat-status loading"></span>
-        <span class="cat-count">зареждане...</span>
-      </div>
-      <div class="cat-box-body">
-        <div class="spinner" style="padding:2rem 0;">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
-        </div>
-      </div>
-    </div>
-  `).join('');
-}
-
-function fillBox(catCode, data) {
-  const box = document.getElementById('catbox-' + catCode);
-  if (!box) return;
-  setBoxStatus(catCode, 'fresh');
-  renderBoxData(catCode, data);
-  box.classList.remove('updated');
-  void box.offsetWidth;
-  box.classList.add('updated');
-  setTimeout(() => box.classList.remove('updated'), 600);
-}
-
-// ---- Main: fetch trending with localStorage cache ----
+// ---- Main: fetch trending from RSS ----
 async function loadTrending() {
   const geo = document.getElementById('geoSelect').value || 'BG';
   const geoLabel = document.getElementById('geoSelect').selectedOptions[0]?.text || geo;
-  document.getElementById('trendingTitle').textContent = `Популярни в ${geoLabel}`;
+  document.getElementById('trendingTitle').textContent = `🔥 Популярни в ${geoLabel}`;
 
-  // Cancel any previous trending fetch chain
-  if (trendingAbort) trendingAbort.abort();
-  trendingAbort = new AbortController();
-  const aborted = () => trendingAbort.signal.aborted;
+  document.getElementById('trendingLoading').style.display = 'flex';
+  document.getElementById('trendingContent').style.display = 'none';
 
-  // Show grid with spinners
-  buildCategoryGrid();
-  document.getElementById('trendingLoading').style.display = 'none';
-  document.getElementById('trendingContent').style.display = '';
-
-  // ── Fast path: proxy.js has a bulk /api/trending endpoint ──
-  if (proxyMode === 'local') {
-    try {
-      const res = await fetch(`${LOCAL_PROXY}/api/trending?geo=${geo}`);
-      if (res.ok) {
-        const json = await res.json();
-        const cats = json.categories || {};
-        for (const c of TRENDING_CATS) {
-          const entry = cats[c.code];
-          if (entry?.data) {
-            saveToCache(geo, c.code, entry.data);
-            fillBox(c.code, entry.data);
-          } else {
-            setBoxStatus(c.code, 'stale');
-            const body = document.getElementById('catbox-' + c.code)?.querySelector('.cat-box-body');
-            if (body) body.innerHTML = '<p style="color:var(--text-muted);padding:1rem;text-align:center;">Очаква се...</p>';
-          }
-        }
-        console.log('Зареждане от proxy.js за ' + geo);
-        return;
-      }
-    } catch (e) {
-      console.warn('proxy.js bulk fetch fail, fallback...', e.message);
+  // Check localStorage cache first
+  const cacheKey = CACHE_KEY_PREFIX + 'rss_' + geo;
+  try {
+    const cached = JSON.parse(localStorage.getItem(cacheKey));
+    if (cached && (Date.now() - cached.ts) < CACHE_MAX_AGE) {
+      document.getElementById('trendingLoading').style.display = 'none';
+      document.getElementById('trendingContent').style.display = '';
+      renderTrendingList(cached.data);
+      console.log('Trending от localStorage кеш ⚡');
+      // Still try to refresh in background
+      fetchTrendingRSS(geo).then(data => {
+        localStorage.setItem(cacheKey, JSON.stringify({ data, ts: Date.now() }));
+        renderTrendingList(data);
+      }).catch(() => {});
+      return;
     }
+  } catch(e) {}
+
+  // Fetch fresh RSS data
+  try {
+    const data = await fetchTrendingRSS(geo);
+    localStorage.setItem(cacheKey, JSON.stringify({ data, ts: Date.now() }));
+    document.getElementById('trendingLoading').style.display = 'none';
+    document.getElementById('trendingContent').style.display = '';
+    renderTrendingList(data);
+    console.log(`Trending заредено за ${geo} (${data.length} елемента)`);
+  } catch (e) {
+    console.warn('Trending RSS грешка:', e.message);
+    document.getElementById('trendingLoading').style.display = 'none';
+    document.getElementById('trendingContent').style.display = '';
+    document.getElementById('trendingList').innerHTML =
+      '<p style="color:var(--text-muted);padding:2rem;text-align:center;">Неуспешно зареждане на популярни търсения</p>';
   }
-
-  // ── Standard path: localStorage cache + sequential fetch ──
-  // Phase 1: Show cached data instantly
-  let uncached = [];
-  for (const c of TRENDING_CATS) {
-    const cached = getFromCache(geo, c.code);
-    if (cached) {
-      fillBox(c.code, cached.data);
-      const ageSec = Math.round((Date.now() - cached.ts) / 1000);
-      const ageLabel = ageSec < 60 ? `преди ${ageSec} сек.` : `преди ${Math.round(ageSec/60)} мин.`;
-      const countEl = document.getElementById('catbox-' + c.code)?.querySelector('.cat-count');
-      if (countEl) countEl.title = 'Кеширано ' + ageLabel;
-    } else {
-      uncached.push(c);
-    }
-  }
-
-  if (uncached.length === 0) {
-    console.log('Всички категории от localStorage кеш ⚡');
-    return;
-  }
-
-  // Phase 2: Fetch uncached categories sequentially
-  console.log(`Зареждане на ${uncached.length} категории за ${geo}...`);
-
-  // Fetch "all" via RSS first (most reliable)
-  const allCat = uncached.find(c => c.code === 'all');
-  if (allCat) {
-    uncached = uncached.filter(c => c.code !== 'all');
-    try {
-      if (aborted()) return;
-      setBoxStatus('all', 'loading');
-      const data = await fetchTrendingRSS(geo);
-      if (aborted()) return;
-      saveToCache(geo, 'all', data);
-      fillBox('all', data);
-    } catch (e) {
-      console.warn('RSS all:', e.message);
-      setBoxStatus('all', 'stale');
-      const body = document.getElementById('catbox-all')?.querySelector('.cat-box-body');
-      if (body) body.innerHTML = '<p style="color:var(--text-muted);padding:1rem;text-align:center;">Неуспешно зареждане</p>';
-    }
-    if (uncached.length) await sleep(STAGGER_DELAY);
-  }
-
-  // Fetch remaining categories via explore API
-  for (let i = 0; i < uncached.length; i++) {
-    const cat = uncached[i];
-    if (aborted()) return;
-    try {
-      setBoxStatus(cat.code, 'loading');
-      const data = await fetchCategoryTrending(geo, cat.catId);
-      if (aborted()) return;
-      saveToCache(geo, cat.code, data);
-      fillBox(cat.code, data);
-    } catch (e) {
-      console.warn(`${cat.label}:`, e.message);
-      setBoxStatus(cat.code, 'stale');
-      const body = document.getElementById('catbox-' + cat.code)?.querySelector('.cat-box-body');
-      if (body) body.innerHTML = '<p style="color:var(--text-muted);padding:1rem;text-align:center;">Неуспешно зареждане</p>';
-      if (e.message?.includes('429')) {
-        await sleep(RATE_LIMIT_PAUSE);
-        try {
-          if (aborted()) return;
-          setBoxStatus(cat.code, 'loading');
-          const data = await fetchCategoryTrending(geo, cat.catId);
-          if (aborted()) return;
-          saveToCache(geo, cat.code, data);
-          fillBox(cat.code, data);
-        } catch (e2) {
-          setBoxStatus(cat.code, 'stale');
-        }
-      }
-    }
-    if (i < uncached.length - 1) await sleep(STAGGER_DELAY);
-  }
-
-  console.log('Зареждане завършено за ' + geo);
 }
 
 // ============================================================
