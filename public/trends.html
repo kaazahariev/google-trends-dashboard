@@ -1,0 +1,1374 @@
+<!DOCTYPE html>
+<html lang="bg">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Google Trends Изследовател</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #f8fafc;
+      --bg-card: #ffffff;
+      --bg-input: #ffffff;
+      --bg-hover: #f1f5f9;
+      --bg-badge: #f1f5f9;
+      --border: #e2e8f0;
+      --text: #0f172a;
+      --text-secondary: #64748b;
+      --text-muted: #94a3b8;
+      --accent: #3b82f6;
+      --accent-hover: #2563eb;
+      --red: #ef4444;
+      --green: #22c55e;
+      --shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+    }
+
+    .dark {
+      --bg: #0a0f1a;
+      --bg-card: #111827;
+      --bg-input: #1e293b;
+      --bg-hover: #1e293b;
+      --bg-badge: #1e293b;
+      --border: #1e293b;
+      --text: #f1f5f9;
+      --text-secondary: #94a3b8;
+      --text-muted: #64748b;
+      --shadow: 0 1px 3px rgba(0,0,0,0.3);
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      transition: background 0.3s, color 0.3s;
+    }
+
+    /* Header */
+    .header {
+      position: sticky; top: 0; z-index: 50;
+      background: var(--bg-card);
+      border-bottom: 1px solid var(--border);
+      backdrop-filter: blur(12px);
+    }
+    .header-inner {
+      max-width: 1200px; margin: 0 auto;
+      padding: 0 1rem; height: 56px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .logo { display: flex; align-items: center; gap: 0.5rem; font-weight: 700; font-size: 1.1rem; }
+    .logo svg { color: var(--accent); }
+
+    .theme-btn {
+      background: none; border: 1px solid var(--border); border-radius: 8px;
+      padding: 6px 8px; cursor: pointer; color: var(--text); display: flex; align-items: center;
+      transition: background 0.2s;
+    }
+    .theme-btn:hover { background: var(--bg-hover); }
+
+    /* Main */
+    .container { max-width: 1200px; margin: 0 auto; padding: 2rem 1rem; }
+    .page-title { font-size: 1.75rem; font-weight: 700; margin-bottom: 0.25rem; }
+    .page-subtitle { color: var(--text-secondary); margin-bottom: 1.5rem; }
+
+    /* Controls */
+    .controls { display: flex; flex-direction: column; gap: 0.75rem; margin-bottom: 2rem; }
+    .search-row { display: flex; gap: 0.5rem; }
+    .filter-row { display: flex; gap: 0.5rem; flex-wrap: wrap; }
+
+    .search-input-wrap {
+      flex: 1; display: flex; align-items: center; flex-wrap: wrap; gap: 6px;
+      background: var(--bg-input); border: 1px solid var(--border); border-radius: 10px;
+      padding: 6px 12px; min-height: 44px; transition: border-color 0.2s;
+    }
+    .search-input-wrap:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(59,130,246,0.15); }
+    .search-input-wrap svg { color: var(--text-muted); flex-shrink: 0; }
+    .search-input {
+      flex: 1; min-width: 150px; border: none; outline: none; background: transparent;
+      color: var(--text); font-size: 0.875rem; padding: 4px 0;
+    }
+    .search-input::placeholder { color: var(--text-muted); }
+
+    .keyword-tag {
+      display: inline-flex; align-items: center; gap: 4px;
+      background: rgba(59,130,246,0.12); color: var(--accent);
+      padding: 2px 8px; border-radius: 6px; font-size: 0.8rem; font-weight: 500;
+    }
+    .keyword-tag button {
+      background: none; border: none; color: inherit; cursor: pointer;
+      padding: 0; font-size: 1rem; line-height: 1; opacity: 0.7;
+    }
+    .keyword-tag button:hover { opacity: 1; }
+
+    select, .btn {
+      height: 44px; border-radius: 10px; font-size: 0.875rem;
+      border: 1px solid var(--border); padding: 0 12px;
+      background: var(--bg-input); color: var(--text); cursor: pointer;
+    }
+
+    .btn-primary {
+      background: var(--accent); color: #fff; border: none;
+      font-weight: 600; padding: 0 20px; display: flex; align-items: center; gap: 6px;
+      transition: background 0.2s;
+    }
+    .btn-primary:hover { background: var(--accent-hover); }
+    .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    /* Cards */
+    .card {
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: 12px; padding: 1.5rem; box-shadow: var(--shadow);
+    }
+    .card-title { font-size: 1.1rem; font-weight: 600; margin-bottom: 1rem; }
+
+    /* Grid */
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+    .space-y { display: flex; flex-direction: column; gap: 1.5rem; }
+
+    /* Tabs */
+    .tabs { display: flex; gap: 2px; background: var(--bg-badge); border-radius: 8px; padding: 3px; margin-bottom: 1rem; }
+    .tab-btn {
+      flex: 1; padding: 6px 12px; border: none; border-radius: 6px;
+      background: transparent; color: var(--text-secondary); cursor: pointer;
+      font-size: 0.8rem; font-weight: 500; transition: all 0.2s;
+    }
+    .tab-btn.active { background: var(--bg-card); color: var(--text); box-shadow: 0 1px 2px rgba(0,0,0,0.05); }
+
+    /* List items */
+    .list-item {
+      display: flex; align-items: center; gap: 8px;
+      padding: 6px 0; font-size: 0.875rem;
+    }
+    .list-rank { width: 20px; text-align: right; color: var(--text-muted); font-size: 0.75rem; flex-shrink: 0; }
+    .list-text { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .list-bar-wrap { width: 80px; display: flex; align-items: center; gap: 4px; flex-shrink: 0; }
+    .list-bar { height: 5px; border-radius: 3px; background: var(--border); flex: 1; overflow: hidden; }
+    .list-bar-fill { height: 100%; border-radius: 3px; background: var(--accent); }
+    .list-value { font-size: 0.7rem; color: var(--text-muted); width: 28px; text-align: right; }
+
+    .badge {
+      font-size: 0.7rem; font-weight: 600; padding: 1px 8px; border-radius: 99px; flex-shrink: 0;
+    }
+    .badge-breakout { background: rgba(239,68,68,0.12); color: var(--red); }
+    .badge-rising { background: rgba(34,197,94,0.12); color: var(--green); }
+
+    /* Trending */
+    .trending-item {
+      padding: 8px; border-radius: 8px; transition: background 0.15s;
+    }
+    .trending-item:hover { background: var(--bg-hover); }
+    .trending-rank {
+      width: 24px; height: 24px; border-radius: 50%; background: var(--bg-badge);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.7rem; font-weight: 600; color: var(--text-secondary); flex-shrink: 0;
+    }
+    .trending-title { font-weight: 500; }
+    .trending-meta { font-size: 0.75rem; color: var(--text-muted); margin-top: 2px; }
+    .trending-snippet { font-size: 0.75rem; color: var(--text-muted); margin-top: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .entity-tag {
+      display: inline-block; background: var(--bg-badge); color: var(--text-secondary);
+      padding: 1px 8px; border-radius: 99px; font-size: 0.7rem; margin-right: 4px; margin-top: 4px;
+    }
+
+    /* Scrollable */
+    .scroll-list { max-height: 420px; overflow-y: auto; }
+    .scroll-list::-webkit-scrollbar { width: 4px; }
+    .scroll-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+    /* Loading */
+    .spinner { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 3rem 0; color: var(--text-muted); }
+    .spinner svg { animation: spin 1s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* Empty */
+    .empty { text-align: center; padding: 3rem 0; color: var(--text-muted); }
+    .empty p:first-child { font-size: 1.1rem; color: var(--text-secondary); }
+    .empty p:last-child { font-size: 0.85rem; margin-top: 0.25rem; }
+
+    /* Error */
+    .error-box {
+      display: flex; align-items: center; gap: 8px;
+      padding: 12px 16px; border-radius: 10px;
+      background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.2);
+      color: var(--red); font-size: 0.875rem;
+    }
+
+    /* Section title */
+    .section-title { font-size: 1.25rem; font-weight: 600; margin-bottom: 1rem; display: flex; align-items: center; gap: 8px; }
+
+    /* Keyword label in cards */
+    .keyword-label { font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; }
+
+    /* Category grid for trending */
+    .cat-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+      gap: 1rem;
+    }
+    .cat-box {
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: 12px; box-shadow: var(--shadow);
+      overflow: hidden; transition: border-color 0.2s;
+    }
+    .cat-box:hover { border-color: var(--accent); }
+    .cat-box-header {
+      display: flex; align-items: center; gap: 8px;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      font-weight: 600; font-size: 0.95rem;
+    }
+    .cat-box-header .cat-icon { font-size: 1.1rem; }
+    .cat-box-header .cat-count {
+      margin-left: auto; font-size: 0.7rem; font-weight: 500;
+      color: var(--text-muted); background: var(--bg-badge);
+      padding: 2px 8px; border-radius: 99px;
+    }
+    .cat-box-body { padding: 8px 12px; max-height: 500px; overflow-y: auto; }
+    .cat-box-body::-webkit-scrollbar { width: 4px; }
+    .cat-box-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+    .cat-box.updating { opacity: 0.6; transition: opacity 0.3s; }
+    .cat-box.updated {
+      animation: boxFlash 0.5s ease;
+    }
+    @keyframes boxFlash {
+      0% { box-shadow: 0 0 0 2px var(--accent); }
+      100% { box-shadow: var(--shadow); }
+    }
+    .cat-box-header .cat-status {
+      width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0;
+    }
+    .cat-status.stale { background: var(--text-muted); }
+    .cat-status.fresh { background: var(--green); }
+    .cat-status.loading { background: var(--accent); animation: pulse 1s infinite; }
+    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+    .cat-box .rising-divider {
+      margin: 8px 0 6px; font-size: 0.7rem; font-weight: 600;
+      color: var(--green); text-transform: uppercase; letter-spacing: 0.05em;
+    }
+
+    /* Chart canvas wrapper */
+    .chart-wrap { position: relative; width: 100%; }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .grid-2 { grid-template-columns: 1fr; }
+      .search-row { flex-direction: column; }
+      .filter-row { flex-direction: column; }
+      select, .btn { width: 100%; }
+    }
+    #results { display: none; }
+  </style>
+</head>
+<body>
+  <header class="header">
+    <div class="header-inner">
+      <div class="logo">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        Trends Изследовател
+      </div>
+      <button class="theme-btn" onclick="toggleTheme()" title="Тъмен/светъл режим">
+        <svg id="theme-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <div class="container">
+    <h1 class="page-title">Google Trends Изследовател</h1>
+    <p class="page-subtitle">Открийте какво търси светът</p>
+
+    <!-- Controls -->
+    <div class="controls">
+      <div class="search-row">
+        <div class="search-input-wrap" id="searchWrap">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <span id="tagContainer"></span>
+          <input type="text" class="search-input" id="searchInput" placeholder="Въведете ключови думи за сравнение (напр. react, vue, angular)" />
+        </div>
+        <button class="btn btn-primary" id="searchBtn" onclick="handleSearch()" disabled>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          Търси
+        </button>
+      </div>
+      <div class="filter-row">
+        <select id="timeRange">
+          <option value="now 1-H">Последен час</option>
+          <option value="now 4-H">Последни 4 часа</option>
+          <option value="now 1-d">Последен ден</option>
+          <option value="now 7-d">Последни 7 дни</option>
+          <option value="today 1-m">Последни 30 дни</option>
+          <option value="today 3-m">Последни 90 дни</option>
+          <option value="today 12-m" selected>Последни 12 месеца</option>
+          <option value="today 5-y">Последни 5 години</option>
+        </select>
+        <select id="geoSelect">
+          <option value="">Целият свят</option>
+          <option value="BG" selected>България</option>
+          <option value="US">САЩ</option>
+          <option value="GB">Великобритания</option>
+          <option value="CA">Канада</option>
+          <option value="AU">Австралия</option>
+          <option value="DE">Германия</option>
+          <option value="FR">Франция</option>
+          <option value="JP">Япония</option>
+          <option value="IN">Индия</option>
+          <option value="BR">Бразилия</option>
+          <option value="MX">Мексико</option>
+          <option value="KR">Южна Корея</option>
+          <option value="IT">Италия</option>
+          <option value="ES">Испания</option>
+          <option value="NL">Нидерландия</option>
+          <option value="SE">Швеция</option>
+          <option value="CH">Швейцария</option>
+          <option value="PL">Полша</option>
+          <option value="RO">Румъния</option>
+          <option value="RS">Сърбия</option>
+          <option value="GR">Гърция</option>
+          <option value="HR">Хърватия</option>
+          <option value="RU">Русия</option>
+          <option value="ZA">Южна Африка</option>
+          <option value="AR">Аржентина</option>
+          <option value="ID">Индонезия</option>
+          <option value="TH">Тайланд</option>
+          <option value="PH">Филипини</option>
+          <option value="SG">Сингапур</option>
+          <option value="TW">Тайван</option>
+          <option value="TR">Турция</option>
+          <option value="AE">ОАЕ</option>
+          <option value="SA">Саудитска Арабия</option>
+        </select>
+        <select id="categorySelect">
+          <option value="0">Всички категории</option>
+          <option value="3">Изкуство и забавление</option>
+          <option value="5">Компютри и електроника</option>
+          <option value="7">Финанси</option>
+          <option value="8">Игри</option>
+          <option value="12">Бизнес и индустрия</option>
+          <option value="13">Интернет и телекомуникации</option>
+          <option value="16">Новини</option>
+          <option value="18">Пазаруване</option>
+          <option value="20">Спорт</option>
+          <option value="44">Красота и фитнес</option>
+          <option value="45">Здраве</option>
+          <option value="47">Автомобили и превозни средства</option>
+          <option value="67">Пътуване</option>
+          <option value="71">Храна и напитки</option>
+          <option value="174">Наука</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Error -->
+    <div id="errorBox" class="error-box" style="display:none;"></div>
+
+    <!-- Loading -->
+    <div id="loading" class="spinner" style="display:none;">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+      <span>Зареждане на данни...</span>
+    </div>
+
+    <!-- Results -->
+    <div id="results" class="space-y">
+      <div class="card">
+        <div class="card-title">Интерес във времето</div>
+        <div class="chart-wrap"><canvas id="timeChart"></canvas></div>
+      </div>
+      <div class="card">
+        <div class="card-title">Интерес по региони</div>
+        <div class="chart-wrap"><canvas id="regionChart"></canvas></div>
+      </div>
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title">Свързани търсения</div>
+          <div class="tabs">
+            <button class="tab-btn active" onclick="switchTab(this,'rqTop','rqRising')">Топ</button>
+            <button class="tab-btn" onclick="switchTab(this,'rqRising','rqTop')">Нарастващи</button>
+          </div>
+          <div class="scroll-list" id="rqTop"></div>
+          <div class="scroll-list" id="rqRising" style="display:none;"></div>
+        </div>
+        <div class="card">
+          <div class="card-title">Свързани теми</div>
+          <div class="tabs">
+            <button class="tab-btn active" onclick="switchTab(this,'rtTop','rtRising')">Топ</button>
+            <button class="tab-btn" onclick="switchTab(this,'rtRising','rtTop')">Нарастващи</button>
+          </div>
+          <div class="scroll-list" id="rtTop"></div>
+          <div class="scroll-list" id="rtRising" style="display:none;"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Empty state -->
+    <div id="emptyState" class="empty">
+      <p>Въведете ключови думи по-горе и натиснете Търси</p>
+      <p>Сравнете до 5 думи за търсене и открийте какво търси светът</p>
+    </div>
+
+    <!-- Trending Section -->
+    <div id="trendingSection" style="margin-top:2rem;">
+      <div id="trendingLoading" class="spinner">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+        <span>Зареждане на популярни търсения за България...</span>
+      </div>
+      <div id="trendingContent" style="display:none;">
+        <h2 class="section-title">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+          <span id="trendingTitle">Популярни в България</span>
+        </h2>
+        <div id="trendingGrid" class="cat-grid"></div>
+      </div>
+    </div>
+  </div>
+
+<script>
+// ============================================================
+// State & Proxy Config
+// ============================================================
+const COLORS = ['#4285F4','#EA4335','#FBBC04','#34A853','#FF6D01'];
+const TRENDS_BASE = 'https://trends.google.com';
+
+// ── Proxy strategy ──────────────────────────────────────────
+// 1. Cloudflare Worker (best): deploy worker/index.js → set URL here
+//    Deploy: cd worker && npx wrangler deploy
+const WORKER_URL = 'https://trends-proxy.kaa-zahariev-86e.workers.dev';
+
+// 2. Local proxy.js (fallback): auto-detected at localhost:3001
+const LOCAL_PROXY = 'http://localhost:3001';
+
+// 3. Public CORS proxies (last resort): shared IPs, may be rate-limited
+const PUBLIC_PROXIES = [
+  { name: 'allorigins', wrap: url => 'https://api.allorigins.win/get?url=' + encodeURIComponent(url), json: true },
+  { name: 'corsproxy',  wrap: url => 'https://corsproxy.io/?' + encodeURIComponent(url), json: false },
+];
+
+// Active proxy mode: 'worker' | 'local' | 'public'
+let proxyMode = WORKER_URL ? 'worker' : 'public';
+let publicProxyIndex = 0;
+let localProxyAvailable = null; // null = unknown, true/false after check
+
+// Cache & rate-limit config
+const CACHE_KEY_PREFIX = 'gt_cache_';
+const CACHE_MAX_AGE = 5 * 60 * 1000; // 5 minutes
+const STAGGER_DELAY = 5000; // 5s between Google API calls
+const RATE_LIMIT_PAUSE = 25000; // 25s pause after 429
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+let keywords = [];
+let timeChart = null;
+let regionChart = null;
+let isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+let trendingAbort = null; // AbortController for trending fetch chain
+
+// Auto-detect local proxy.js on startup
+async function detectLocalProxy() {
+  try {
+    const res = await fetch(LOCAL_PROXY + '/api/status', { signal: AbortSignal.timeout(2000) });
+    if (res.ok) {
+      localProxyAvailable = true;
+      proxyMode = 'local';
+      console.log('🟢 Открит proxy.js на localhost:3001');
+      return true;
+    }
+  } catch (e) {}
+  localProxyAvailable = false;
+  console.log(proxyMode === 'worker'
+    ? '🟢 Използва се Cloudflare Worker: ' + WORKER_URL
+    : '🟡 Публични CORS прокси (може да има ограничения)');
+  return false;
+}
+
+// ============================================================
+// localStorage Cache
+// ============================================================
+function getCacheKey(geo, catCode) { return CACHE_KEY_PREFIX + geo + '_' + catCode; }
+
+function getFromCache(geo, catCode) {
+  try {
+    const raw = localStorage.getItem(getCacheKey(geo, catCode));
+    if (!raw) return null;
+    const entry = JSON.parse(raw);
+    if (Date.now() - entry.ts > CACHE_MAX_AGE) return null;
+    return entry;
+  } catch (e) { return null; }
+}
+
+function saveToCache(geo, catCode, data) {
+  try {
+    localStorage.setItem(getCacheKey(geo, catCode), JSON.stringify({ data, ts: Date.now() }));
+  } catch (e) {
+    // localStorage full — clear old entries
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith(CACHE_KEY_PREFIX)) localStorage.removeItem(k);
+    }
+    try { localStorage.setItem(getCacheKey(geo, catCode), JSON.stringify({ data, ts: Date.now() })); } catch (e2) {}
+  }
+}
+
+// ============================================================
+// Theme
+// ============================================================
+function applyTheme() {
+  document.documentElement.classList.toggle('dark', isDark);
+  document.getElementById('theme-icon').innerHTML = isDark
+    ? '<path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>'
+    : '<circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>';
+}
+function toggleTheme() { isDark = !isDark; applyTheme(); rebuildCharts(); }
+applyTheme();
+
+// ============================================================
+// Keyword Tags
+// ============================================================
+const searchInput = document.getElementById('searchInput');
+const tagContainer = document.getElementById('tagContainer');
+const searchBtn = document.getElementById('searchBtn');
+
+function renderTags() {
+  tagContainer.innerHTML = keywords.map(k =>
+    `<span class="keyword-tag">${k}<button onclick="removeKeyword('${k}')">&times;</button></span>`
+  ).join('');
+  searchBtn.disabled = keywords.length === 0;
+  searchInput.placeholder = keywords.length === 0
+    ? 'Въведете ключови думи за сравнение (напр. react, vue, angular)'
+    : keywords.length >= 5 ? 'Макс. 5 думи' : 'Добави дума...';
+  searchInput.disabled = keywords.length >= 5;
+}
+
+function addKeyword(val) {
+  const k = val.trim().toLowerCase();
+  if (k && !keywords.includes(k) && keywords.length < 5) {
+    keywords.push(k);
+    renderTags();
+  }
+}
+
+window.removeKeyword = function(k) {
+  keywords = keywords.filter(x => x !== k);
+  renderTags();
+};
+
+searchInput.addEventListener('keydown', e => {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    const val = searchInput.value;
+    if (val.includes(',')) {
+      val.split(',').forEach(v => addKeyword(v));
+    } else if (val.trim()) {
+      addKeyword(val);
+    } else if (keywords.length > 0) {
+      handleSearch();
+      return;
+    }
+    searchInput.value = '';
+  } else if (e.key === 'Backspace' && !searchInput.value && keywords.length) {
+    keywords.pop();
+    renderTags();
+  }
+});
+
+// ============================================================
+// Google Trends API (via public CORS proxy)
+// ============================================================
+function parseTrendsResponse(text) {
+  const cleaned = text.replace(/^\)\]\}',?\n?/, '');
+  return JSON.parse(cleaned);
+}
+
+async function proxyFetch(fullUrl, label, retries = 2) {
+  // ── Mode: Worker ──
+  if (proxyMode === 'worker') {
+    return await workerFetch(fullUrl, label, retries);
+  }
+  // ── Mode: Local proxy.js ──
+  if (proxyMode === 'local') {
+    return await localFetch(fullUrl, label, retries);
+  }
+  // ── Mode: Public CORS proxies ──
+  return await publicFetch(fullUrl, label, retries);
+}
+
+// Cloudflare Worker proxy
+async function workerFetch(fullUrl, label, retries) {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const url = WORKER_URL + '?url=' + encodeURIComponent(fullUrl);
+      const res = await fetch(url);
+      if (res.status === 429) {
+        if (attempt < retries) {
+          const wait = RATE_LIMIT_PAUSE * (attempt + 1);
+          console.warn(`[${label}] 429 via worker, retry in ${wait/1000}s...`);
+          await sleep(wait);
+          continue;
+        }
+        throw new Error('Ограничение от Google (429). Моля, изчакайте минута.');
+      }
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return await res.text();
+    } catch (err) {
+      if (attempt < retries && (err.message?.includes('Failed to fetch') || err.message?.includes('NetworkError'))) {
+        await sleep(3000);
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw new Error('Worker не е достъпен. Проверете URL.');
+}
+
+// Local proxy.js on localhost:3001
+async function localFetch(fullUrl, label, retries) {
+  // Convert full Google URL to relative path for proxy.js
+  const relative = fullUrl.replace(TRENDS_BASE, '');
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const res = await fetch(LOCAL_PROXY + relative);
+      if (res.status === 429) {
+        if (attempt < retries) { await sleep(RATE_LIMIT_PAUSE); continue; }
+        throw new Error('Ограничение от Google (429). Моля, изчакайте минута.');
+      }
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return await res.text();
+    } catch (err) {
+      if (err.message?.includes('Failed to fetch')) {
+        // proxy.js went down — fall back to public
+        console.warn(`[${label}] proxy.js недостъпен, пробвам публични прокси...`);
+        proxyMode = 'public';
+        return await publicFetch(fullUrl, label, retries);
+      }
+      throw err;
+    }
+  }
+  throw new Error('Грешка при proxy.js');
+}
+
+// Public CORS proxies (allorigins, corsproxy.io)
+async function publicFetch(fullUrl, label, retries) {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    for (let pi = 0; pi < PUBLIC_PROXIES.length; pi++) {
+      const proxyIdx = (publicProxyIndex + pi) % PUBLIC_PROXIES.length;
+      const proxy = PUBLIC_PROXIES[proxyIdx];
+      const proxiedUrl = proxy.wrap(fullUrl);
+      try {
+        const res = await fetch(proxiedUrl);
+        let text;
+        if (proxy.json) {
+          const json = await res.json();
+          const httpCode = json.status?.http_code || 200;
+          if (httpCode === 429) {
+            if (attempt < retries) {
+              const wait = RATE_LIMIT_PAUSE * (attempt + 1);
+              console.warn(`[${label}] 429 via ${proxy.name}, retry in ${wait/1000}s...`);
+              await sleep(wait);
+              break;
+            }
+            throw new Error('Ограничение от Google (429). Моля, изчакайте минута и опитайте отново.');
+          }
+          if (httpCode >= 400) throw new Error(`HTTP ${httpCode}`);
+          text = json.contents || '';
+        } else {
+          text = await res.text();
+          if (res.status === 429 || text.includes('Too Many Requests')) {
+            if (attempt < retries) {
+              const wait = RATE_LIMIT_PAUSE * (attempt + 1);
+              console.warn(`[${label}] 429 via ${proxy.name}, retry in ${wait/1000}s...`);
+              await sleep(wait);
+              break;
+            }
+            throw new Error('Ограничение от Google (429). Моля, изчакайте минута и опитайте отново.');
+          }
+          if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        }
+        if (!text || text.length < 5) throw new Error('empty');
+        publicProxyIndex = proxyIdx;
+        return text;
+      } catch (err) {
+        const msg = err.message || '';
+        if (msg.includes('Failed to fetch') || msg.includes('NetworkError') || msg.includes('Load failed') || msg === 'empty') {
+          console.warn(`[${label}] ${proxy.name} неуспешен, пробвам следващия...`);
+          continue;
+        }
+        throw err;
+      }
+    }
+  }
+  throw new Error('CORS прокси услугите не са достъпни. Опитайте по-късно.');
+}
+
+async function fetchTrendsExplore(kws, time, geo, category = 0) {
+  const comparisonItem = kws.map(k => ({
+    keyword: k,
+    geo: geo,
+    time: time
+  }));
+
+  const req = {
+    comparisonItem,
+    category: parseInt(category) || 0,
+    property: ''
+  };
+
+  const url = TRENDS_BASE + '/trends/api/explore?hl=en-US&tz=240&req=' + encodeURIComponent(JSON.stringify(req)) + '&token=';
+  const text = await proxyFetch(url, 'explore');
+  return parseTrendsResponse(text);
+}
+
+async function fetchWidgetData(widget) {
+  const token = widget.token;
+  const req = encodeURIComponent(JSON.stringify(widget.request));
+  let endpoint;
+
+  switch (widget.id) {
+    case 'TIMESERIES':
+      endpoint = '/trends/api/widgetdata/multiline';
+      break;
+    case 'GEO_MAP':
+    case 'GEO_MAP_0':
+      endpoint = '/trends/api/widgetdata/comparedgeo';
+      break;
+    case 'RELATED_QUERIES':
+      endpoint = '/trends/api/widgetdata/relatedsearches';
+      break;
+    case 'RELATED_TOPICS':
+      endpoint = '/trends/api/widgetdata/relatedsearches';
+      break;
+    default:
+      if (widget.id?.startsWith('TIMESERIES')) endpoint = '/trends/api/widgetdata/multiline';
+      else if (widget.id?.startsWith('GEO_MAP')) endpoint = '/trends/api/widgetdata/comparedgeo';
+      else if (widget.id?.startsWith('RELATED')) endpoint = '/trends/api/widgetdata/relatedsearches';
+      else throw new Error('Unknown widget type: ' + widget.id);
+  }
+
+  const url = `${TRENDS_BASE}${endpoint}?hl=en-US&tz=240&req=${req}&token=${token}`;
+  const text = await proxyFetch(url, widget.id);
+  return parseTrendsResponse(text);
+}
+
+// Fetch trending via RSS
+async function fetchTrendingRSS(geo) {
+  let text;
+
+  if (proxyMode === 'local') {
+    // proxy.js has a dedicated RSS endpoint
+    const res = await fetch(`${LOCAL_PROXY}/rss-trending?geo=${geo || 'BG'}`);
+    if (!res.ok) throw new Error(`RSS HTTP ${res.status}`);
+    text = await res.text();
+  } else {
+    // Worker or public proxy: fetch the full Google RSS URL
+    const rssUrl = `${TRENDS_BASE}/trending/rss?geo=${geo || 'BG'}`;
+    text = await proxyFetch(rssUrl, 'trendingRSS');
+  }
+
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(text, 'application/xml');
+  const items = doc.querySelectorAll('item');
+  return Array.from(items).map(item => ({
+    title: item.querySelector('title')?.textContent || '',
+    traffic: item.getElementsByTagNameNS('https://trends.google.com/trending/rss', 'approx_traffic')[0]?.textContent || '',
+    newsTitle: item.getElementsByTagNameNS('https://trends.google.com/trending/rss', 'news_item_title')[0]?.textContent || '',
+    newsSource: item.getElementsByTagNameNS('https://trends.google.com/trending/rss', 'news_item_source')[0]?.textContent || '',
+    newsUrl: item.getElementsByTagNameNS('https://trends.google.com/trending/rss', 'news_item_url')[0]?.textContent || '',
+  }));
+}
+
+// Fetch category trending via explore API (client-side)
+async function fetchCategoryTrending(geo, catId) {
+  const req = JSON.stringify({
+    comparisonItem: [{ keyword: '', geo, time: 'now 7-d' }],
+    category: catId,
+    property: ''
+  });
+  const exploreUrl = TRENDS_BASE + '/trends/api/explore?hl=en-US&tz=240&req=' + encodeURIComponent(req) + '&token=';
+  const exploreText = await proxyFetch(exploreUrl, 'explore-cat-' + catId);
+  const explore = parseTrendsResponse(exploreText);
+
+  const widgets = explore.widgets || [];
+  const queriesWidget = widgets.find(w => w.id?.startsWith('RELATED_QUERIES'));
+  if (!queriesWidget) return { top: [], rising: [] };
+
+  const token = queriesWidget.token;
+  const widgetReq = encodeURIComponent(JSON.stringify(queriesWidget.request));
+  const dataUrl = TRENDS_BASE + '/trends/api/widgetdata/relatedsearches?hl=en-US&tz=240&req=' + widgetReq + '&token=' + token;
+  const dataText = await proxyFetch(dataUrl, 'queries-cat-' + catId);
+  const data = parseTrendsResponse(dataText);
+
+  const ranked = data?.default?.rankedList || [];
+  return {
+    top: ranked[0]?.rankedKeyword || [],
+    rising: ranked[1]?.rankedKeyword || [],
+  };
+}
+
+// ============================================================
+// Main search handler
+// ============================================================
+let lastTimeData = null;
+let lastRegionData = null;
+
+async function handleSearch() {
+  if (keywords.length === 0) return;
+
+  const time = document.getElementById('timeRange').value;
+  const geo = document.getElementById('geoSelect').value;
+  const category = document.getElementById('categorySelect').value;
+
+  showLoading(true);
+  hideError();
+  document.getElementById('results').style.display = 'none';
+  document.getElementById('emptyState').style.display = 'none';
+
+  try {
+    const explore = await fetchTrendsExplore(keywords, time, geo, category);
+    const widgets = explore.widgets || [];
+
+    const timeseriesWidget = widgets.find(w => w.id?.startsWith('TIMESERIES'));
+    const geoWidget = widgets.find(w => w.id?.startsWith('GEO_MAP'));
+    const queriesWidgets = widgets.filter(w => w.id?.startsWith('RELATED_QUERIES'));
+    const topicsWidgets = widgets.filter(w => w.id?.startsWith('RELATED_TOPICS'));
+
+    const promises = [];
+    promises.push(timeseriesWidget ? fetchWidgetData(timeseriesWidget) : Promise.resolve(null));
+    promises.push(geoWidget ? fetchWidgetData(geoWidget) : Promise.resolve(null));
+    promises.push(queriesWidgets.length ? Promise.all(queriesWidgets.map(fetchWidgetData)) : Promise.resolve(null));
+    promises.push(topicsWidgets.length ? Promise.all(topicsWidgets.map(fetchWidgetData)) : Promise.resolve(null));
+
+    const [timeData, regionData, queriesData, topicsData] = await Promise.allSettled(promises);
+
+    lastTimeData = timeData.status === 'fulfilled' ? timeData.value : null;
+    lastRegionData = regionData.status === 'fulfilled' ? regionData.value : null;
+
+    if (lastTimeData) renderTimeChart(lastTimeData);
+    if (lastRegionData) renderRegionChart(lastRegionData);
+
+    const qData = queriesData.status === 'fulfilled' ? queriesData.value : null;
+    const tData = topicsData.status === 'fulfilled' ? topicsData.value : null;
+    renderRelatedQueries(qData);
+    renderRelatedTopics(tData);
+
+    document.getElementById('results').style.display = 'flex';
+    showLoading(false);
+  } catch (err) {
+    console.error('Search error:', err);
+    const helpMsg = proxyMode === 'public'
+      ? ' Съвет: стартирайте node proxy.js за по-надеждна връзка.'
+      : '';
+    showError(err.message?.includes('429')
+      ? 'Ограничение от Google (429). Изчакайте минута и опитайте отново.' + helpMsg
+      : err.message?.includes('CORS прокси') || err.message?.includes('достъпни')
+      ? 'Прокси услугите не са достъпни.' + helpMsg
+      : 'Грешка при зареждане: ' + err.message + helpMsg);
+    showLoading(false);
+  }
+}
+
+// ============================================================
+// Chart rendering
+// ============================================================
+function getChartColors() {
+  return {
+    grid: isDark ? '#1e293b' : '#e5e7eb',
+    text: isDark ? '#94a3b8' : '#6b7280',
+    bg: isDark ? '#111827' : '#ffffff',
+  };
+}
+
+function renderTimeChart(data) {
+  const canvas = document.getElementById('timeChart');
+  if (timeChart) timeChart.destroy();
+
+  const timeline = data?.default?.timelineData || [];
+  if (!timeline.length) return;
+
+  const labels = timeline.map(p => p.formattedAxisTime || p.formattedTime || '');
+  const datasets = keywords.map((kw, i) => ({
+    label: kw,
+    data: timeline.map(p => p.value?.[i] ?? 0),
+    borderColor: COLORS[i % COLORS.length],
+    backgroundColor: COLORS[i % COLORS.length] + '20',
+    borderWidth: 2,
+    pointRadius: 0,
+    pointHoverRadius: 5,
+    tension: 0.3,
+    fill: keywords.length === 1,
+  }));
+
+  const c = getChartColors();
+  timeChart = new Chart(canvas, {
+    type: 'line',
+    data: { labels, datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: true,
+      aspectRatio: 2.5,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { labels: { color: c.text, usePointStyle: true, pointStyle: 'circle' } },
+        tooltip: {
+          backgroundColor: c.bg,
+          titleColor: isDark ? '#f1f5f9' : '#0f172a',
+          bodyColor: isDark ? '#cbd5e1' : '#475569',
+          borderColor: c.grid,
+          borderWidth: 1,
+          cornerRadius: 8,
+          padding: 10,
+        }
+      },
+      scales: {
+        x: { ticks: { color: c.text, maxTicksLimit: 12 }, grid: { color: c.grid } },
+        y: { min: 0, max: 100, ticks: { color: c.text }, grid: { color: c.grid } }
+      }
+    }
+  });
+}
+
+function renderRegionChart(data) {
+  const canvas = document.getElementById('regionChart');
+  if (regionChart) regionChart.destroy();
+
+  const geoData = data?.default?.geoMapData || [];
+  if (!geoData.length) {
+    canvas.parentElement.innerHTML = '<p style="text-align:center;color:var(--text-muted);padding:2rem 0;">Няма данни по региони</p>';
+    return;
+  }
+
+  const sorted = [...geoData].sort((a, b) => (b.value?.[0] ?? 0) - (a.value?.[0] ?? 0)).slice(0, 20);
+  const labels = sorted.map(d => d.geoName);
+
+  const datasets = keywords.map((kw, i) => ({
+    label: kw,
+    data: sorted.map(d => d.value?.[i] ?? 0),
+    backgroundColor: COLORS[i % COLORS.length] + 'cc',
+    borderRadius: 4,
+  }));
+
+  const c = getChartColors();
+  canvas.parentElement.style.height = Math.max(400, sorted.length * 28) + 'px';
+
+  regionChart = new Chart(canvas, {
+    type: 'bar',
+    data: { labels, datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      indexAxis: 'y',
+      plugins: {
+        legend: { labels: { color: c.text, usePointStyle: true, pointStyle: 'circle' } },
+        tooltip: {
+          backgroundColor: c.bg,
+          titleColor: isDark ? '#f1f5f9' : '#0f172a',
+          bodyColor: isDark ? '#cbd5e1' : '#475569',
+          borderColor: c.grid,
+          borderWidth: 1,
+          cornerRadius: 8,
+        }
+      },
+      scales: {
+        x: { min: 0, max: 100, ticks: { color: c.text }, grid: { color: c.grid } },
+        y: { ticks: { color: c.text, font: { size: 11 } }, grid: { display: false } }
+      }
+    }
+  });
+}
+
+function rebuildCharts() {
+  if (lastTimeData) renderTimeChart(lastTimeData);
+  if (lastRegionData) renderRegionChart(lastRegionData);
+}
+
+// ============================================================
+// Related Queries / Topics
+// ============================================================
+function renderRelatedQueries(dataArr) {
+  const topEl = document.getElementById('rqTop');
+  const risingEl = document.getElementById('rqRising');
+
+  if (!dataArr || !dataArr.length) {
+    topEl.innerHTML = '<p style="color:var(--text-muted);padding:1rem;text-align:center;">Няма данни</p>';
+    risingEl.innerHTML = topEl.innerHTML;
+    return;
+  }
+
+  let topHtml = '', risingHtml = '';
+
+  dataArr.forEach((widgetData, ki) => {
+    const ranked = widgetData?.default?.rankedList || [];
+    const topList = ranked[0]?.rankedKeyword || [];
+    const risingList = ranked[1]?.rankedKeyword || [];
+    const kwLabel = keywords.length > 1
+      ? `<div class="keyword-label" style="color:${COLORS[ki % COLORS.length]}">${keywords[ki] || ''}</div>`
+      : '';
+
+    if (topList.length) {
+      topHtml += kwLabel;
+      topList.slice(0, 10).forEach((item, i) => {
+        topHtml += `<div class="list-item">
+          <span class="list-rank">${i+1}</span>
+          <span class="list-text">${item.query}</span>
+          <div class="list-bar-wrap">
+            <div class="list-bar"><div class="list-bar-fill" style="width:${item.value}%"></div></div>
+            <span class="list-value">${item.value}</span>
+          </div>
+        </div>`;
+      });
+    }
+
+    if (risingList.length) {
+      risingHtml += kwLabel;
+      risingList.slice(0, 10).forEach((item, i) => {
+        const isBreakout = item.formattedValue === 'Breakout';
+        risingHtml += `<div class="list-item">
+          <span class="list-rank">${i+1}</span>
+          <span class="list-text">${item.query}</span>
+          <span class="badge ${isBreakout ? 'badge-breakout' : 'badge-rising'}">${item.formattedValue}</span>
+        </div>`;
+      });
+    }
+  });
+
+  topEl.innerHTML = topHtml || '<p style="color:var(--text-muted);padding:1rem;text-align:center;">Няма данни</p>';
+  risingEl.innerHTML = risingHtml || '<p style="color:var(--text-muted);padding:1rem;text-align:center;">Няма данни</p>';
+}
+
+function renderRelatedTopics(dataArr) {
+  const topEl = document.getElementById('rtTop');
+  const risingEl = document.getElementById('rtRising');
+
+  const noTopicsMsg = `<div style="color:var(--text-muted);padding:1.5rem 1rem;text-align:center;">
+    <div style="font-size:1.3rem;margin-bottom:0.4rem;">&#9888;</div>
+    <div style="font-size:0.85rem;font-weight:500;">Няма достатъчно данни</div>
+    <div style="font-size:0.75rem;margin-top:0.3rem;opacity:0.7;">Google Trends има ограничени данни за теми при много търсения.<br>Свързаните търсения (вляво) обикновено показват повече резултати.</div>
+  </div>`;
+  if (!dataArr || !dataArr.length) {
+    topEl.innerHTML = noTopicsMsg;
+    risingEl.innerHTML = noTopicsMsg;
+    return;
+  }
+
+  let topHtml = '', risingHtml = '';
+
+  dataArr.forEach((widgetData, ki) => {
+    const ranked = widgetData?.default?.rankedList || [];
+    const topList = ranked[0]?.rankedKeyword || [];
+    const risingList = ranked[1]?.rankedKeyword || [];
+    const kwLabel = keywords.length > 1
+      ? `<div class="keyword-label" style="color:${COLORS[ki % COLORS.length]}">${keywords[ki] || ''}</div>`
+      : '';
+
+    if (topList.length) {
+      topHtml += kwLabel;
+      topList.slice(0, 10).forEach((item, i) => {
+        const title = item.topic?.title || item.query || '';
+        const type = item.topic?.type || '';
+        topHtml += `<div class="list-item">
+          <span class="list-rank">${i+1}</span>
+          <span class="list-text">${title}${type ? ` <span style="color:var(--text-muted);font-size:0.7rem">${type}</span>` : ''}</span>
+          <div class="list-bar-wrap">
+            <div class="list-bar"><div class="list-bar-fill" style="width:${item.value}%"></div></div>
+            <span class="list-value">${item.value}</span>
+          </div>
+        </div>`;
+      });
+    }
+
+    if (risingList.length) {
+      risingHtml += kwLabel;
+      risingList.slice(0, 10).forEach((item, i) => {
+        const title = item.topic?.title || item.query || '';
+        const isBreakout = item.formattedValue === 'Breakout';
+        risingHtml += `<div class="list-item">
+          <span class="list-rank">${i+1}</span>
+          <span class="list-text">${title}</span>
+          <span class="badge ${isBreakout ? 'badge-breakout' : 'badge-rising'}">${item.formattedValue}</span>
+        </div>`;
+      });
+    }
+  });
+
+  topEl.innerHTML = topHtml || noTopicsMsg;
+  risingEl.innerHTML = risingHtml || noTopicsMsg;
+}
+
+// ============================================================
+// Tabs
+// ============================================================
+window.switchTab = function(btn, showId, hideId) {
+  document.getElementById(showId).style.display = '';
+  document.getElementById(hideId).style.display = 'none';
+  btn.parentElement.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+};
+
+// ============================================================
+// Trending by Categories (client-side with localStorage cache)
+// ============================================================
+const TRENDING_CATS = [
+  { code: 'all', catId: 0,   label: 'Всички',       icon: '🔥' },
+  { code: 'ent', catId: 3,   label: 'Забавление',   icon: '🎬' },
+  { code: 'spo', catId: 20,  label: 'Спорт',        icon: '⚽' },
+  { code: 'tec', catId: 5,   label: 'Технологии',   icon: '💻' },
+  { code: 'biz', catId: 12,  label: 'Бизнес',       icon: '💼' },
+  { code: 'hea', catId: 45,  label: 'Здраве',       icon: '🏥' },
+  { code: 'fin', catId: 7,   label: 'Финанси',      icon: '📈' },
+  { code: 'new', catId: 16,  label: 'Новини',       icon: '📰' },
+];
+
+// ---- Renderers ----
+function renderAllBoxBody(trends, el) {
+  if (!trends || !trends.length) { el.innerHTML = '<p style="color:var(--text-muted);padding:1rem;text-align:center;">Няма данни</p>'; return; }
+  el.innerHTML = trends.slice(0, 50).map((t, i) => `
+    <div class="trending-item" style="display:flex;gap:8px;align-items:flex-start;">
+      <span class="trending-rank">${i+1}</span>
+      <div style="flex:1;min-width:0;">
+        <div class="trending-title">${t.title}</div>
+        <div class="trending-meta">${t.traffic ? t.traffic + ' търсения' : ''}</div>
+        ${t.newsTitle ? `<div class="trending-snippet">${t.newsSource ? t.newsSource + ' — ' : ''}${t.newsTitle}</div>` : ''}
+      </div>
+    </div>
+  `).join('');
+}
+
+function renderCatBoxBody(topQ, risingQ, el) {
+  if ((!topQ || !topQ.length) && (!risingQ || !risingQ.length)) { el.innerHTML = '<p style="color:var(--text-muted);padding:1rem;text-align:center;">Няма данни</p>'; return; }
+  let html = '';
+  if (topQ && topQ.length) {
+    topQ.slice(0, 50).forEach((item, i) => {
+      html += `<div class="list-item">
+        <span class="list-rank">${i+1}</span>
+        <span class="list-text">${item.query || item.topic?.title || ''}</span>
+        <div class="list-bar-wrap">
+          <div class="list-bar"><div class="list-bar-fill" style="width:${item.value}%"></div></div>
+          <span class="list-value">${item.value}</span>
+        </div>
+      </div>`;
+    });
+  }
+  if (risingQ && risingQ.length) {
+    html += '<div class="rising-divider">🚀 Нарастващи</div>';
+    risingQ.slice(0, 25).forEach((item, i) => {
+      const isBreakout = item.formattedValue === 'Breakout';
+      html += `<div class="list-item">
+        <span class="list-rank">${i+1}</span>
+        <span class="list-text">${item.query || item.topic?.title || ''}</span>
+        <span class="badge ${isBreakout ? 'badge-breakout' : 'badge-rising'}">${item.formattedValue}</span>
+      </div>`;
+    });
+  }
+  el.innerHTML = html;
+}
+
+function renderBoxData(catCode, data) {
+  const box = document.getElementById('catbox-' + catCode);
+  if (!box) return;
+  const body = box.querySelector('.cat-box-body');
+  const countBadge = box.querySelector('.cat-count');
+  if (catCode === 'all') {
+    renderAllBoxBody(data, body);
+    if (countBadge) countBadge.textContent = (data?.length || 0) + ' елемента';
+  } else {
+    renderCatBoxBody(data.top, data.rising, body);
+    const total = (data.top?.length || 0) + (data.rising?.length || 0);
+    if (countBadge) countBadge.textContent = total + ' елемента';
+  }
+}
+
+function setBoxStatus(catCode, status) {
+  const box = document.getElementById('catbox-' + catCode);
+  if (!box) return;
+  const dot = box.querySelector('.cat-status');
+  if (dot) dot.className = 'cat-status ' + status;
+}
+
+function buildCategoryGrid() {
+  const grid = document.getElementById('trendingGrid');
+  grid.innerHTML = TRENDING_CATS.map(c => `
+    <div class="cat-box" id="catbox-${c.code}">
+      <div class="cat-box-header">
+        <span class="cat-icon">${c.icon}</span>
+        <span>${c.label}</span>
+        <span class="cat-status loading"></span>
+        <span class="cat-count">зареждане...</span>
+      </div>
+      <div class="cat-box-body">
+        <div class="spinner" style="padding:2rem 0;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+        </div>
+      </div>
+    </div>
+  `).join('');
+}
+
+function fillBox(catCode, data) {
+  const box = document.getElementById('catbox-' + catCode);
+  if (!box) return;
+  setBoxStatus(catCode, 'fresh');
+  renderBoxData(catCode, data);
+  box.classList.remove('updated');
+  void box.offsetWidth;
+  box.classList.add('updated');
+  setTimeout(() => box.classList.remove('updated'), 600);
+}
+
+// ---- Main: fetch trending with localStorage cache ----
+async function loadTrending() {
+  const geo = document.getElementById('geoSelect').value || 'BG';
+  const geoLabel = document.getElementById('geoSelect').selectedOptions[0]?.text || geo;
+  document.getElementById('trendingTitle').textContent = `Популярни в ${geoLabel}`;
+
+  // Cancel any previous trending fetch chain
+  if (trendingAbort) trendingAbort.abort();
+  trendingAbort = new AbortController();
+  const aborted = () => trendingAbort.signal.aborted;
+
+  // Show grid with spinners
+  buildCategoryGrid();
+  document.getElementById('trendingLoading').style.display = 'none';
+  document.getElementById('trendingContent').style.display = '';
+
+  // ── Fast path: proxy.js has a bulk /api/trending endpoint ──
+  if (proxyMode === 'local') {
+    try {
+      const res = await fetch(`${LOCAL_PROXY}/api/trending?geo=${geo}`);
+      if (res.ok) {
+        const json = await res.json();
+        const cats = json.categories || {};
+        for (const c of TRENDING_CATS) {
+          const entry = cats[c.code];
+          if (entry?.data) {
+            saveToCache(geo, c.code, entry.data);
+            fillBox(c.code, entry.data);
+          } else {
+            setBoxStatus(c.code, 'stale');
+            const body = document.getElementById('catbox-' + c.code)?.querySelector('.cat-box-body');
+            if (body) body.innerHTML = '<p style="color:var(--text-muted);padding:1rem;text-align:center;">Очаква се...</p>';
+          }
+        }
+        console.log('Зареждане от proxy.js за ' + geo);
+        return;
+      }
+    } catch (e) {
+      console.warn('proxy.js bulk fetch fail, fallback...', e.message);
+    }
+  }
+
+  // ── Standard path: localStorage cache + sequential fetch ──
+  // Phase 1: Show cached data instantly
+  let uncached = [];
+  for (const c of TRENDING_CATS) {
+    const cached = getFromCache(geo, c.code);
+    if (cached) {
+      fillBox(c.code, cached.data);
+      const ageSec = Math.round((Date.now() - cached.ts) / 1000);
+      const ageLabel = ageSec < 60 ? `преди ${ageSec} сек.` : `преди ${Math.round(ageSec/60)} мин.`;
+      const countEl = document.getElementById('catbox-' + c.code)?.querySelector('.cat-count');
+      if (countEl) countEl.title = 'Кеширано ' + ageLabel;
+    } else {
+      uncached.push(c);
+    }
+  }
+
+  if (uncached.length === 0) {
+    console.log('Всички категории от localStorage кеш ⚡');
+    return;
+  }
+
+  // Phase 2: Fetch uncached categories sequentially
+  console.log(`Зареждане на ${uncached.length} категории за ${geo}...`);
+
+  // Fetch "all" via RSS first (most reliable)
+  const allCat = uncached.find(c => c.code === 'all');
+  if (allCat) {
+    uncached = uncached.filter(c => c.code !== 'all');
+    try {
+      if (aborted()) return;
+      setBoxStatus('all', 'loading');
+      const data = await fetchTrendingRSS(geo);
+      if (aborted()) return;
+      saveToCache(geo, 'all', data);
+      fillBox('all', data);
+    } catch (e) {
+      console.warn('RSS all:', e.message);
+      setBoxStatus('all', 'stale');
+      const body = document.getElementById('catbox-all')?.querySelector('.cat-box-body');
+      if (body) body.innerHTML = '<p style="color:var(--text-muted);padding:1rem;text-align:center;">Неуспешно зареждане</p>';
+    }
+    if (uncached.length) await sleep(STAGGER_DELAY);
+  }
+
+  // Fetch remaining categories via explore API
+  for (let i = 0; i < uncached.length; i++) {
+    const cat = uncached[i];
+    if (aborted()) return;
+    try {
+      setBoxStatus(cat.code, 'loading');
+      const data = await fetchCategoryTrending(geo, cat.catId);
+      if (aborted()) return;
+      saveToCache(geo, cat.code, data);
+      fillBox(cat.code, data);
+    } catch (e) {
+      console.warn(`${cat.label}:`, e.message);
+      setBoxStatus(cat.code, 'stale');
+      const body = document.getElementById('catbox-' + cat.code)?.querySelector('.cat-box-body');
+      if (body) body.innerHTML = '<p style="color:var(--text-muted);padding:1rem;text-align:center;">Неуспешно зареждане</p>';
+      if (e.message?.includes('429')) {
+        await sleep(RATE_LIMIT_PAUSE);
+        try {
+          if (aborted()) return;
+          setBoxStatus(cat.code, 'loading');
+          const data = await fetchCategoryTrending(geo, cat.catId);
+          if (aborted()) return;
+          saveToCache(geo, cat.code, data);
+          fillBox(cat.code, data);
+        } catch (e2) {
+          setBoxStatus(cat.code, 'stale');
+        }
+      }
+    }
+    if (i < uncached.length - 1) await sleep(STAGGER_DELAY);
+  }
+
+  console.log('Зареждане завършено за ' + geo);
+}
+
+// ============================================================
+// Helpers
+// ============================================================
+function showLoading(show) {
+  document.getElementById('loading').style.display = show ? 'flex' : 'none';
+}
+function showError(msg) {
+  const el = document.getElementById('errorBox');
+  el.textContent = msg;
+  el.style.display = 'flex';
+}
+function hideError() {
+  document.getElementById('errorBox').style.display = 'none';
+}
+
+// ============================================================
+// Init
+// ============================================================
+// Reload trending when geo changes
+document.getElementById('geoSelect').addEventListener('change', () => loadTrending());
+
+// Startup: detect proxy → load trending → run default search
+(async () => {
+  // 1. Auto-detect proxy mode
+  await detectLocalProxy();
+
+  // 2. Start trending first (RSS is very reliable, loads fast)
+  loadTrending();
+
+  // 3. Small delay to let RSS finish, then run default search
+  await sleep(proxyMode === 'local' ? 500 : 3000);
+  addKeyword('днес');
+  try {
+    await handleSearch();
+  } catch(e) { console.warn('Initial search:', e.message); }
+})();
+</script>
+</body>
+</html>
