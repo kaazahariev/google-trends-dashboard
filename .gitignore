@@ -39,3 +39,10 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# cache
+.trends-cache.json
+
+# worker dependencies
+worker/node_modules
+worker/package-lock.json
