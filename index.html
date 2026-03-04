@@ -425,23 +425,27 @@ const COLORS = ['#4285F4','#EA4335','#FBBC04','#34A853','#FF6D01'];
 const TRENDS_BASE = 'https://trends.google.com';
 
 // ── Proxy strategy ──────────────────────────────────────────
-// 1. Cloudflare Worker (best): deploy worker/index.js → set URL here
-//    Deploy: cd worker && npx wrangler deploy
+// Priority: Vercel API (same-origin) → Cloudflare Worker → local proxy.js → public CORS
+
+// 1. Vercel API proxy (same-origin, auto-detected on *.vercel.app)
+const VERCEL_PROXY = '/api/proxy';
+
+// 2. Cloudflare Worker (fallback)
 const WORKER_URL = 'https://trends-proxy.kaa-zahariev-86e.workers.dev';
 
-// 2. Local proxy.js (fallback): auto-detected at localhost:3001
+// 3. Local proxy.js (fallback): auto-detected at localhost:3001
 const LOCAL_PROXY = 'http://localhost:3001';
 
-// 3. Public CORS proxies (last resort): shared IPs, may be rate-limited
+// 4. Public CORS proxies (last resort): shared IPs, may be rate-limited
 const PUBLIC_PROXIES = [
   { name: 'allorigins', wrap: url => 'https://api.allorigins.win/get?url=' + encodeURIComponent(url), json: true },
   { name: 'corsproxy',  wrap: url => 'https://corsproxy.io/?' + encodeURIComponent(url), json: false },
 ];
 
-// Active proxy mode: 'worker' | 'local' | 'public'
-let proxyMode = WORKER_URL ? 'worker' : 'public';
+// Active proxy mode: 'vercel' | 'worker' | 'local' | 'public'
+let proxyMode = 'public';
 let publicProxyIndex = 0;
-let localProxyAvailable = null; // null = unknown, true/false after check
+let localProxyAvailable = null;
 
 // Cache & rate-limit config
 const CACHE_KEY_PREFIX = 'gt_cache_';
@@ -458,21 +462,41 @@ let isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
 let trendingAbort = null; // AbortController for trending fetch chain
 
 // Auto-detect local proxy.js on startup
-async function detectLocalProxy() {
+async function detectProxy() {
+  // 1. Check if running on Vercel (same-origin API proxy)
+  if (location.hostname.includes('vercel.app') || location.hostname.includes('vercel.sh')) {
+    try {
+      const res = await fetch(VERCEL_PROXY + '?rss=BG', { signal: AbortSignal.timeout(3000) });
+      if (res.ok) {
+        proxyMode = 'vercel';
+        console.log('🟢 Vercel API прокси (same-origin)');
+        return;
+      }
+    } catch (e) {}
+  }
+
+  // 2. Check local proxy.js
   try {
     const res = await fetch(LOCAL_PROXY + '/api/status', { signal: AbortSignal.timeout(2000) });
     if (res.ok) {
       localProxyAvailable = true;
       proxyMode = 'local';
       console.log('🟢 Открит proxy.js на localhost:3001');
-      return true;
+      return;
     }
   } catch (e) {}
   localProxyAvailable = false;
-  console.log(proxyMode === 'worker'
-    ? '🟢 Използва се Cloudflare Worker: ' + WORKER_URL
-    : '🟡 Публични CORS прокси (може да има ограничения)');
-  return false;
+
+  // 3. Cloudflare Worker
+  if (WORKER_URL) {
+    proxyMode = 'worker';
+    console.log('🟢 Cloudflare Worker: ' + WORKER_URL);
+    return;
+  }
+
+  // 4. Public CORS proxies (last resort)
+  proxyMode = 'public';
+  console.log('🟡 Публични CORS прокси (може да има ограничения)');
 }
 
 // ============================================================
@@ -574,16 +598,38 @@ function parseTrendsResponse(text) {
 }
 
 async function proxyFetch(fullUrl, label, retries = 2) {
-  // ── Mode: Worker ──
-  if (proxyMode === 'worker') {
-    return await workerFetch(fullUrl, label, retries);
-  }
-  // ── Mode: Local proxy.js ──
-  if (proxyMode === 'local') {
-    return await localFetch(fullUrl, label, retries);
-  }
-  // ── Mode: Public CORS proxies ──
+  if (proxyMode === 'vercel') return await vercelFetch(fullUrl, label, retries);
+  if (proxyMode === 'worker') return await workerFetch(fullUrl, label, retries);
+  if (proxyMode === 'local')  return await localFetch(fullUrl, label, retries);
   return await publicFetch(fullUrl, label, retries);
+}
+
+// ── Vercel API proxy (same-origin, no CORS issues) ──
+async function vercelFetch(fullUrl, label, retries) {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const url = VERCEL_PROXY + '?url=' + encodeURIComponent(fullUrl);
+      const res = await fetch(url);
+      if (res.status === 429) {
+        if (attempt < retries) {
+          const wait = RATE_LIMIT_PAUSE * (attempt + 1);
+          console.warn(`[${label}] 429 via Vercel, retry in ${wait/1000}s...`);
+          await sleep(wait);
+          continue;
+        }
+        throw new Error('Ограничение от Google (429). Изчакайте минута и опитайте отново.');
+      }
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      return await res.text();
+    } catch (err) {
+      if (attempt < retries && err.message?.includes('Failed to fetch')) {
+        await sleep(3000);
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw new Error('Vercel proxy не е достъпен.');
 }
 
 // Cloudflare Worker proxy
@@ -746,13 +792,15 @@ async function fetchWidgetData(widget) {
 async function fetchTrendingRSS(geo) {
   let text;
 
-  if (proxyMode === 'local') {
-    // proxy.js has a dedicated RSS endpoint
+  if (proxyMode === 'vercel') {
+    const res = await fetch(`${VERCEL_PROXY}?rss=${geo || 'BG'}`);
+    if (!res.ok) throw new Error(`RSS HTTP ${res.status}`);
+    text = await res.text();
+  } else if (proxyMode === 'local') {
     const res = await fetch(`${LOCAL_PROXY}/rss-trending?geo=${geo || 'BG'}`);
     if (!res.ok) throw new Error(`RSS HTTP ${res.status}`);
     text = await res.text();
   } else {
-    // Worker or public proxy: fetch the full Google RSS URL
     const rssUrl = `${TRENDS_BASE}/trending/rss?geo=${geo || 'BG'}`;
     text = await proxyFetch(rssUrl, 'trendingRSS');
   }
@@ -1162,7 +1210,7 @@ document.getElementById('geoSelect').addEventListener('change', () => loadTrendi
 // Startup: detect proxy → load trending → run default search
 (async () => {
   // 1. Auto-detect proxy mode
-  await detectLocalProxy();
+  await detectProxy();
 
   // 2. Start trending first (RSS is very reliable, loads fast)
   loadTrending();
