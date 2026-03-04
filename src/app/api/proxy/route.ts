@@ -54,7 +54,6 @@ async function proxyTo(targetUrl: string): Promise<NextResponse> {
         Referer: "https://trends.google.com/trends/explore",
         Cookie: "CONSENT=YES+cb.20210720-08-p0.en+FX+111",
       },
-      // @ts-expect-error - Next.js fetch cache option
       cache: "no-store",
     });
 
